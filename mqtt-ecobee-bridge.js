@@ -271,10 +271,8 @@ function renewTokens() {
             const accessToken = body.access_token
 
             logging.log('Reloaded tokens - refresh Token: ' + refreshToken + '   access Token: ' + accessToken)
-            if (refreshToken)
-                setRefreshToken(refreshToken)
-            if (accessToken)
-                setAccessToken(accessToken)
+            setRefreshToken(refreshToken)
+            setAccessToken(accessToken)
         }
 
         if (err !== null && err !== undefined) {
