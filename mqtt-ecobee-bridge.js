@@ -303,7 +303,7 @@ function doPoll() {
                 logging.log('body:' + JSON.stringify(body))
             }
 
-            var status = body.status
+            var status = body !== undefined ? body.status : null
             var statusCode = null
 
             if (status !== null && status !== undefined) {
