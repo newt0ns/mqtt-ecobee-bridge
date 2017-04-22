@@ -11,7 +11,10 @@
         "start": "node mqtt-ecobee-bridge.js"
     },
     "dependencies": {
+        "fahrenheit-to-celsius": "^1.0.0",
+        "repeat": "^0.0.6",
         "request": "^2.81.0",
+        "configstore": "^3.0.0",
         "mqtt": "^2.6.2",
         "url": "^0.11.0"
     },
