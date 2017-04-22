@@ -276,6 +276,11 @@ function renewTokens() {
             if (accessToken)
                 setAccessToken(accessToken)
         }
+
+        if (err !== null && err !== undefined) {
+            setRefreshToken(null)
+            setAccessToken(null)
+        }
     })
 
 }
@@ -297,10 +302,17 @@ function doPoll() {
                 logging.log('error:' + err)
                 logging.log('body:' + JSON.stringify(body))
             }
-            logging.log('error:' + err)
-            logging.log('body:' + JSON.stringify(body))
 
-            if (err !== null) {
+            var status = body.status
+            var statusCode = null
+
+            if (status !== null && status !== undefined) {
+                statusCode = status.code
+            }
+            if (statusCode === 14) {
+                logging.log('Thermostat query failed, loading tokens')
+                renewTokens()
+            } else if (err !== null) {
                 logging.log('Thermostat query failed, loading tokens')
                 renewTokens()
             } else if (body !== null) {
