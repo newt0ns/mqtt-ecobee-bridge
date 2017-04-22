@@ -137,6 +137,8 @@ function queryAccessToken(callback) {
 }
 
 function queryThermostats(callback) {
+    if (waitingForPIN) return
+
     // POST
     var ecobeeAccessToken = getAccessToken()
     var ecobeeGetThermostatInfoURL = 'https://api.ecobee.com/1/thermostat?format=json&body=%7B%22selection%22%3A%7B%22includeAlerts%22%3A%22false%22%2C%22selectionType%22%3A%22registered%22%2C%22selectionMatch%22%3A%22%22%2C%22includeEvents%22%3A%22false%22%2C%22includeSettings%22%3A%22false%22%2C%22includeRuntime%22%3A%22true%22%2C%22includeSensors%22%3A%22true%22%2C%22includeExtendedRuntime%22%3A%22true%22%2C%22includeEquipmentStatus%22%3A%22true%22%2C%22includeEvents%22%3A%22true%22%7D%7D'
@@ -160,6 +162,8 @@ function queryThermostats(callback) {
 
 // auto, cool, heat, off
 function setHVACMode(mode, callback) {
+    if (waitingForPIN) return
+
     // POST
     var ecobeeAccessToken = getAccessToken()
     var ecobeeActionURL = 'https://api.ecobee.com/1/thermostat?format=json'
@@ -184,6 +188,8 @@ function setHVACMode(mode, callback) {
 
 // sleep, home, away
 function setMode(mode, callback) {
+    if (waitingForPIN) return
+
     // POST
     var ecobeeAccessToken = getAccessToken()
     var ecobeeActionURL = 'https://api.ecobee.com/1/thermostat?format=json'
