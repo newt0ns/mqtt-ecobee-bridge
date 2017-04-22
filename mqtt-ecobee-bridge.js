@@ -15,10 +15,6 @@ const host = process.env.MQTT_HOST
 const ecobeeTopic = process.env.ECOBEE_TOPIC
 const ecobeeClientID = process.env.ECOBEE_CLIENT_ID
 
-
-setRefreshToken(null)
-setAccessToken(null)
-
 // Set up modules
 logging.set_enabled(true)
 
