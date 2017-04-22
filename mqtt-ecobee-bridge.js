@@ -21,6 +21,7 @@ logging.set_enabled(true)
 
 // Setup MQTT
 var client = mqtt.connect(host)
+var waitingForPIN = false
 
 // MQTT Observation
 
@@ -215,6 +216,8 @@ function periodicRefresh() {
 }
 
 function runLoop() {
+    if (waitingForPIN) return
+
     const ecobeeAccessToken = getAccessToken()
     const ecobeeRefreshToken = getRefreshToken()
 
@@ -234,6 +237,7 @@ function runLoop() {
     } else {
         if (!hasRequestedPIN) {
             hasRequestedPIN = true
+            waitingForPIN = true
 
             requestPIN(function(err, body) {
                 const ecobeePin = body.ecobeePin
@@ -252,9 +256,16 @@ function runLoop() {
                 logging.log('')
 
                 setAccessToken(accessToken)
+                logging.log('...waiting')
 
                 var sleep = require('sleep')
                 sleep.sleep(60)
+                logging.log('...timeout scheduled')
+                setTimeout(function() {
+                    logging.log('...fired')
+                    waitingForPIN = false
+                    queryRefreshToken()
+                }, 3000)
             })
         }
 
@@ -284,6 +295,8 @@ function renewTokens() {
 }
 
 function doPoll() {
+    if (waitingForPIN) return
+
     try {
 
         const ecobeeAccessToken = getAccessToken()
