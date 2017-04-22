@@ -245,6 +245,8 @@ function runLoop() {
                 logging.log('=                                                          =')
                 logging.log('=        Ecobee Pin: ' + ecobeePin + '                                  =')
                 logging.log('=                                                          =')
+                logging.log('=        In 60 seconds access token will refresh...        =')
+                logging.log('=                                                          =')
                 logging.log('============================================================')
                 logging.log('')
                 logging.log('')
@@ -264,82 +266,86 @@ function renewTokens() {
     logging.log('Renewing tokens')
 
     queryAccessToken(function(err, body) {
-            if (body !== null && body !== undefined) {
-                const refreshToken = body.refresh_token
-                const accessToken = body.access_token
+        if (body !== null && body !== undefined) {
+            const refreshToken = body.refresh_token
+            const accessToken = body.access_token
 
-                logging.log('Reloaded tokens - refresh Token: ' + refreshToken + '   access Token: ' + accessToken)
-                if (refreshToken)
-                    setRefreshToken(refreshToken)
-                if (accessToken)
-                    setAccessToken(accessToken)
-            })
-    }
+            logging.log('Reloaded tokens - refresh Token: ' + refreshToken + '   access Token: ' + accessToken)
+            if (refreshToken)
+                setRefreshToken(refreshToken)
+            if (accessToken)
+                setAccessToken(accessToken)
+        }
+    })
 
 }
 
 function doPoll() {
-    const ecobeeAccessToken = getAccessToken()
-    var hasAccessToken = ecobeeAccessToken !== null
+    try {
+
+        const ecobeeAccessToken = getAccessToken()
+        var hasAccessToken = ecobeeAccessToken !== null
 
 
-    if (!hasAccessToken) return
+        if (!hasAccessToken) return
 
-    logging.log('polling')
+        logging.log('polling')
 
-    queryThermostats(function(err, body) {
-        logging.log('Loaded thermostats')
-        if (err !== null) {
+        queryThermostats(function(err, body) {
+            logging.log('Loaded thermostats')
+            if (err !== null) {
+                logging.log('error:' + err)
+                logging.log('body:' + JSON.stringify(body))
+            }
             logging.log('error:' + err)
             logging.log('body:' + JSON.stringify(body))
-        }
-        logging.log('error:' + err)
-        logging.log('body:' + JSON.stringify(body))
 
-        if (err !== null) {
-            logging.log('Thermostat query failed, loading tokens')
-            renewTokens()
-        } else if (body !== null) {
-            logging.log('Loading done:' + JSON.stringify(body))
-            const thermostatList = body.thermostatList
-            logging.log('thermostatList:' + thermostatList)
-            if (thermostatList === null || thermostatList === undefined) {
-                return
-            }
+            if (err !== null) {
+                logging.log('Thermostat query failed, loading tokens')
+                renewTokens()
+            } else if (body !== null) {
+                logging.log('Loading done:' + JSON.stringify(body))
+                const thermostatList = body.thermostatList
+                logging.log('thermostatList:' + thermostatList)
+                if (thermostatList === null || thermostatList === undefined) {
+                    return
+                }
 
-            const thermostat = thermostatList[0]
-            const thermostatName = thermostat.name
-            const events = thermostat.events[0]
-            const mode = events.holdClimateRef
-            const fan = events.fan
-            const remoteSensors = thermostat.remoteSensors
+                const thermostat = thermostatList[0]
+                const thermostatName = thermostat.name
+                const events = thermostat.events[0]
+                const mode = events.holdClimateRef
+                const fan = events.fan
+                const remoteSensors = thermostat.remoteSensors
 
-            logging.log('thermostatName:' + thermostatName)
-            logging.log('mode:' + mode)
-            logging.log('fan:' + fan)
-            logging.log('remoteSensors:' + remoteSensors)
+                logging.log('thermostatName:' + thermostatName)
+                logging.log('mode:' + mode)
+                logging.log('fan:' + fan)
+                logging.log('remoteSensors:' + remoteSensors)
 
 
-            remoteSensors.forEach(function(sensor) {
-                // logging.log('sensor:' + JSON.stringify(sensor))
-                const sensorName = sensor.name
-                const capabilities = sensor.capability
-                capabilities.forEach(function(capability) {
-                    const type = capability.type
-                    var value = capability.value
+                remoteSensors.forEach(function(sensor) {
+                    const sensorName = sensor.name
+                    const capabilities = sensor.capability
+                    capabilities.forEach(function(capability) {
+                        const type = capability.type
+                        var value = capability.value
 
-                    if (type === 'temperature') {
-                        value = (Number(value) / 10)
-                        value = f2c(value).toFixed(1)
-                    }
+                        if (type === 'temperature') {
+                            value = (Number(value) / 10)
+                            value = f2c(value).toFixed(1)
+                        }
 
-                    logging.log('   name:' + sensorName + ' type: ' + type + '    value: ' + value)
-                    mqtt_helpers.publish(client, ecobeeTopic + '/' + sensorName, value)
+                        logging.log('   name:' + sensorName + ' type: ' + type + '    value: ' + value)
+                        mqtt_helpers.publish(client, ecobeeTopic + '/' + sensorName, value)
+                    }, this)
                 }, this)
-            }, this)
 
-        }
-    })
+            }
+        })
+    } catch (error) {
+        logging.log('   **** caught error during poll: ' + error)
+    }
 }
 
 
