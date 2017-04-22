@@ -375,7 +375,7 @@ function doPoll() {
                         }
 
                         logging.log('   name:' + sensorName + ' type: ' + type + '    value: ' + value)
-                        mqtt_helpers.publish(client, ecobeeTopic + '/' + sensorName, value)
+                        mqtt_helpers.publish(client, ecobeeTopic + '/' + type + '/' + sensorName, value)
                     }, this)
                 }, this)
 
