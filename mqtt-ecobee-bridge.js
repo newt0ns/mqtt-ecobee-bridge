@@ -137,7 +137,7 @@ function queryThermostats(callback) {
     var ecobeeAccessToken = getAccessToken()
     var ecobeeGetThermostatInfoURL = 'https://api.ecobee.com/1/thermostat?format=json&body=%7B%22selection%22%3A%7B%22includeAlerts%22%3A%22false%22%2C%22selectionType%22%3A%22registered%22%2C%22selectionMatch%22%3A%22%22%2C%22includeEvents%22%3A%22false%22%2C%22includeSettings%22%3A%22false%22%2C%22includeRuntime%22%3A%22true%22%2C%22includeSensors%22%3A%22true%22%2C%22includeExtendedRuntime%22%3A%22true%22%2C%22includeEquipmentStatus%22%3A%22true%22%2C%22includeEvents%22%3A%22true%22%7D%7D'
 
-    logging.log('queryThermostats: ' + ecobeeGetThermostatInfoURL)
+    logging.log('queryThermostats')
 
     request.get({ url: ecobeeGetThermostatInfoURL, json: true },
         function(err, response, body) {
@@ -234,15 +234,29 @@ function runLoop() {
     } else {
         if (!hasRequestedPIN) {
             hasRequestedPIN = true
+
             requestPIN(function(err, body) {
                 const ecobeePin = body.ecobeePin
                 const accessToken = body.code
 
-                logging.log('Ecobee Pin: ' + ecobeePin + '   Access Token: ' + accessToken)
+                logging.log('')
+                logging.log('============================================================')
+                logging.log('=     Ecobee PIN Setup                                     =')
+                logging.log('=                                                          =')
+                logging.log('=        Ecobee Pin: ' + ecobeePin + '                                  =')
+                logging.log('=                                                          =')
+                logging.log('============================================================')
+                logging.log('')
+                logging.log('')
 
                 setAccessToken(accessToken)
+
+                var sleep = require('sleep')
+                sleep.sleep(60)
             })
         }
+
+
     }
 }
 
@@ -263,19 +277,28 @@ function renewTokens() {
 }
 
 function doPoll() {
+    logging.log('polling')
+
     queryThermostats(function(err, body) {
         logging.log('Loaded thermostats')
         if (err !== null) {
             logging.log('error:' + err)
             logging.log('body:' + JSON.stringify(body))
         }
+        logging.log('error:' + err)
+        logging.log('body:' + JSON.stringify(body))
 
         if (err !== null) {
             logging.log('Thermostat query failed, loading tokens')
             renewTokens()
-        } else {
-            logging.log('Loading done:')
+        } else if (body !== null) {
+            logging.log('Loading done:' + JSON.stringify(body))
             const thermostatList = body.thermostatList
+            logging.log('thermostatList:' + thermostatList)
+            if (thermostatList === null || thermostatList === undefined) {
+                return
+            }
+
             const thermostat = thermostatList[0]
             const thermostatName = thermostat.name
             const events = thermostat.events[0]
