@@ -12,11 +12,9 @@ const f2c = require('fahrenheit-to-celsius')
 // create a Configstore instance with an unique ID e.g.
 // Package name and optionally some default values
 const conf = new Configstore(pkg.name, { foo: 'bar' })
-
-const ecobeeClientID = 'AX3EpkzokNDHGoozr1uDCRAgNtbdJb22'
-
-// Config
 const host = process.env.MQTT_HOST
+const ecobeeTopic = process.env.ECOBEE_TOPIC
+const ecobeeClientID = process.env.ECOBEE_CLIENT_ID
 
 // Set up modules
 logging.set_enabled(true)
@@ -28,7 +26,8 @@ var client = mqtt.connect(host)
 
 client.on('connect', () => {
     logging.log('Reconnecting...\n')
-    client.subscribe('#')
+    client.subscribe(ecobeeTopic + '/set/mode')
+    client.subscribe(ecobeeTopic + '/set/hvac')
 })
 
 client.on('disconnect', () => {
@@ -38,6 +37,19 @@ client.on('disconnect', () => {
 
 client.on('message', (topic, message) => {
     logging.log(' ' + topic + ':' + message)
+    var target = '' + message
+    if (topic.indexOf('/set/mode')) {
+        setMode(target, function(err, body) {
+            logging.log('error:' + err)
+            logging.log('body:' + JSON.stringify(body))
+        })
+    } else {
+        setHVACMode(target, function(err, body) {
+            logging.log('setHVACMode')
+            logging.log('error:' + err)
+            logging.log('body:' + JSON.stringify(body))
+        })
+    }
 })
 
 function setRefreshToken(token) {
@@ -141,26 +153,6 @@ function queryThermostats(callback) {
         }).auth(null, null, true, ecobeeAccessToken)
 }
 
-function querySensors(callback) {
-    // POST
-    var ecobeeAccessToken = getAccessToken()
-    var ecobeeGetSensorInfoURL = 'https://api.ecobee.com/1/thermostatSummary?format=json&body=%7B%22selection%22%3A%7B%22includeAlerts%22%3A%22false%22%2C%22selectionType%22%3A%22registered%22%2C%22selectionMatch%22%3A%22%22%2C%22includeEvents%22%3A%22false%22%2C%22includeSettings%22%3A%22false%22%2C%22includeRuntime%22%3A%22true%22%2C%22includeSensors%22%3A%22true%22%2C%22includeExtendedRuntime%22%3A%22true%22%2C%22includeEquipmentStatus%22%3A%22true%22%2C%22includeEvents%22%3A%22true%22%7D%7D'
-
-    logging.log('querySensors')
-
-    request.get({ url: ecobeeGetSensorInfoURL, json: true },
-        function(err, response, body) {
-            if (err !== null && err !== undefined) {
-                logging.log('error:' + err)
-                logging.log('response:' + response)
-                logging.log('body:' + JSON.stringify(body))
-            }
-
-            if (callback !== null && callback !== undefined) {
-                callback(err, body)
-            }
-        }).auth(null, null, true, ecobeeAccessToken)
-}
 
 // auto, cool, heat, off
 function setHVACMode(mode, callback) {
@@ -192,7 +184,7 @@ function setMode(mode, callback) {
     var ecobeeAccessToken = getAccessToken()
     var ecobeeActionURL = 'https://api.ecobee.com/1/thermostat?format=json'
 
-    logging.log('setHVACMode: ' + mode)
+    logging.log('setMode: ' + mode)
 
     var postBody = { 'selection': { 'selectionType': 'registered', 'selectionMatch': '' }, 'functions': [{ 'type': 'setHold', 'params': { 'holdType': 'indefinite', 'holdClimateRef': mode } }] }
 
@@ -304,28 +296,20 @@ function doPoll() {
                 capabilities.forEach(function(capability) {
                     const type = capability.type
                     var value = capability.value
+
                     if (type === 'temperature') {
                         value = (Number(value) / 10)
                         value = f2c(value).toFixed(1)
                     }
+
                     logging.log('   name:' + sensorName + ' type: ' + type + '    value: ' + value)
+                    mqtt_helpers.publish(client, ecobeeTopic + '/' + sensorName, value)
                 }, this)
             }, this)
 
         }
     })
 }
-// setMode('home', function(err, body) {
-//     logging.log('Loaded thermostats')
-//     logging.log('error:' + err)
-//     logging.log('body:' + JSON.stringify(body))
-// })
-
-// setHVACMode('auto', function(err, body) {
-//     logging.log('Loaded thermostats')
-//     logging.log('error:' + err)
-//     logging.log('body:' + JSON.stringify(body))
-// })
 
 
 
