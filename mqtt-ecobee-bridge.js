@@ -277,6 +277,12 @@ function renewTokens() {
 }
 
 function doPoll() {
+    const ecobeeAccessToken = getAccessToken()
+    var hasAccessToken = ecobeeAccessToken !== null
+
+
+    if (!hasAccessToken) return
+
     logging.log('polling')
 
     queryThermostats(function(err, body) {
