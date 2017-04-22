@@ -8,13 +8,16 @@ const Configstore = require('configstore')
 const pkg = require('./package.json')
 const f2c = require('fahrenheit-to-celsius')
 
-
 // create a Configstore instance with an unique ID e.g.
 // Package name and optionally some default values
 const conf = new Configstore(pkg.name, { foo: 'bar' })
 const host = process.env.MQTT_HOST
 const ecobeeTopic = process.env.ECOBEE_TOPIC
 const ecobeeClientID = process.env.ECOBEE_CLIENT_ID
+
+
+setRefreshToken(null)
+setAccessToken(null)
 
 // Set up modules
 logging.set_enabled(true)
@@ -256,16 +259,26 @@ function runLoop() {
                 logging.log('')
 
                 setAccessToken(accessToken)
-                logging.log('...waiting')
 
-                var sleep = require('sleep')
-                sleep.sleep(60)
-                logging.log('...timeout scheduled')
                 setTimeout(function() {
-                    logging.log('...fired')
-                    waitingForPIN = false
-                    queryRefreshToken()
-                }, 3000)
+                    logging.log('... querying tokens')
+                    queryRefreshToken(function(err, body) {
+                        if (body !== null && body !== undefined) {
+                            const refreshToken = body.refresh_token
+                            const accessToken = body.access_token
+
+                            logging.log('Loaded tokens - refresh Token: ' + refreshToken + '   access Token: ' + accessToken)
+                            setRefreshToken(refreshToken)
+                            setAccessToken(accessToken)
+                        }
+
+                        if (err !== null && err !== undefined) {
+                            setRefreshToken(null)
+                            setAccessToken(null)
+                        }
+                        waitingForPIN = false
+                    })
+                }, 60000)
             })
         }
 
