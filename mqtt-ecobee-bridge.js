@@ -264,15 +264,17 @@ function renewTokens() {
     logging.log('Renewing tokens')
 
     queryAccessToken(function(err, body) {
-        const refreshToken = body.refresh_token
-        const accessToken = body.access_token
+            if (body !== null && body !== undefined) {
+                const refreshToken = body.refresh_token
+                const accessToken = body.access_token
 
-        logging.log('Reloaded tokens - refresh Token: ' + refreshToken + '   access Token: ' + accessToken)
-        if (refreshToken)
-            setRefreshToken(refreshToken)
-        if (accessToken)
-            setAccessToken(accessToken)
-    })
+                logging.log('Reloaded tokens - refresh Token: ' + refreshToken + '   access Token: ' + accessToken)
+                if (refreshToken)
+                    setRefreshToken(refreshToken)
+                if (accessToken)
+                    setAccessToken(accessToken)
+            })
+    }
 
 }
 
