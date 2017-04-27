@@ -19,8 +19,8 @@ const ecobeeClientID = process.env.ECOBEE_CLIENT_ID
 const healthCheckPort = process.env.HEALTH_CHECK_PORT
 const healthCheckTime = process.env.HEALTH_CHECK_TIME
 const healthCheckURL = process.env.HEALTH_CHECK_URL
-if ( healthCheckPort !== null && healthCheckTime !== null && healthCheckURL !== null
-    && healthCheckPort !== undefined && healthCheckTime !== undefined && healthCheckURL !== undefined ) {
+if (healthCheckPort !== null && healthCheckTime !== null && healthCheckURL !== null &&
+    healthCheckPort !== undefined && healthCheckTime !== undefined && healthCheckURL !== undefined) {
     logging.log('Starting health checks')
     health.startHealthChecks(healthCheckURL, healthCheckPort, healthCheckTime)
 } else {
