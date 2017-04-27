@@ -407,6 +407,26 @@ function doPoll() {
                 }
 
                 if (err !== null) {
+                    if (
+                        err.code === 'ETIMEDOUT' ||
+                        err.code === 'ENETUNREACH' ||
+                        err.code === 'ECONNREFUSED' ||
+                        err.code === 'EADDRNOTAVAIL' ||
+                        err.code === 'ELOOP' ||
+                        err.code === 'EHOSTUNREACH' ||
+                        err.code === 'ENETDOWN' ||
+                        err.code === 'EOPNOTSUPP' ||
+                        err.code === 'ENAMETOOLONG' ||
+                        err.code === 'ECONNRESET' ||
+                        err.code === 'EADDRINUSE' ||
+                        err.code === 'EACCES' ||
+                        err.code === 'ENOENT' ||
+                        err.code === 'ECONNREFUSED'
+                    ) {
+                        health.unhealthyEvent()
+                        logging.log('request error:' + err)
+                        return
+                    }
 
                 } else if (statusCode === 14) {
                     logging.log('Thermostat query failed, loading tokens')
