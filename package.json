@@ -13,6 +13,8 @@
     "dependencies": {
         "fahrenheit-to-celsius": "^1.0.0",
         "sleep": "^5.1.1",
+        "syslog": "^0.1.1",
+        "express": "^4.15.2",
         "repeat": "^0.0.6",
         "request": "^2.81.0",
         "configstore": "^3.0.0",

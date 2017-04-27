@@ -2,6 +2,7 @@
 const mqtt = require('mqtt')
 const logging = require('./homeautomation-js-lib/logging.js')
 const mqtt_helpers = require('./homeautomation-js-lib/mqtt_helpers.js')
+const health = require('./homeautomation-js-lib/health.js')
 const repeat = require('repeat')
 const request = require('request')
 const Configstore = require('configstore')
@@ -14,6 +15,17 @@ const conf = new Configstore(pkg.name, { foo: 'bar' })
 const host = process.env.MQTT_HOST
 const ecobeeTopic = process.env.ECOBEE_TOPIC
 const ecobeeClientID = process.env.ECOBEE_CLIENT_ID
+
+const healthCheckPort = process.env.HEALTH_CHECK_PORT
+const healthCheckTime = process.env.HEALTH_CHECK_TIME
+const healthCheckURL = process.env.HEALTH_CHECK_URL
+if ( healthCheckPort !== null && healthCheckTime !== null && healthCheckURL !== null
+    && healthCheckPort !== undefined && healthCheckTime !== undefined && healthCheckURL !== undefined ) {
+    logging.log('Starting health checks')
+    health.startHealthChecks(healthCheckURL, healthCheckPort, healthCheckTime)
+} else {
+    logging.log('Not starting health checks')
+}
 
 // Set up modules
 logging.set_enabled(true)
@@ -28,11 +40,13 @@ client.on('connect', () => {
     logging.log('Reconnecting...\n')
     client.subscribe(ecobeeTopic + '/set/mode')
     client.subscribe(ecobeeTopic + '/set/hvac')
+    health.healthyEvent()
 })
 
 client.on('disconnect', () => {
     logging.log('Reconnecting...\n')
     client.connect(host)
+    health.unhealthyEvent()
 })
 
 client.on('message', (topic, message) => {
@@ -54,7 +68,7 @@ client.on('message', (topic, message) => {
 
 function setRefreshToken(token) {
     conf.set('refresh-token', token)
-
+    health.healthyEvent()
 }
 
 function getRefreshToken() {
@@ -63,6 +77,7 @@ function getRefreshToken() {
 
 function setAccessToken(accessToken) {
     conf.set('access-token', accessToken)
+    health.healthyEvent()
 }
 
 function getAccessToken() {
@@ -82,6 +97,7 @@ function requestPIN(callback) {
                 logging.log('response:' + response)
                 logging.log('body:' + JSON.stringify(body))
             }
+
 
             if (callback !== null && callback !== undefined) {
                 callback(err, body)
@@ -259,6 +275,7 @@ function runLoop() {
                 logging.log('============================================================')
                 logging.log('')
                 logging.log('')
+                health.healthyEvent()
 
                 setAccessToken(accessToken)
 
@@ -272,9 +289,11 @@ function runLoop() {
                             logging.log('Loaded tokens - refresh Token: ' + refreshToken + '   access Token: ' + accessToken)
                             setRefreshToken(refreshToken)
                             setAccessToken(accessToken)
+                            health.healthyEvent()
                         }
 
                         if (err !== null && err !== undefined) {
+                            health.unhealthyEvent()
                             setRefreshToken(null)
                             setAccessToken(null)
                         }
@@ -299,11 +318,13 @@ function renewTokens() {
             logging.log('Reloaded tokens - refresh Token: ' + refreshToken + '   access Token: ' + accessToken)
             setRefreshToken(refreshToken)
             setAccessToken(accessToken)
+            health.healthyEvent()
         }
 
         if (err !== null && err !== undefined) {
             setRefreshToken(null)
             setAccessToken(null)
+            health.unhealthyEvent()
         }
     })
 
@@ -338,9 +359,11 @@ function doPoll() {
             if (statusCode === 14) {
                 logging.log('Thermostat query failed, loading tokens')
                 renewTokens()
+                health.unhealthyEvent()
             } else if (err !== null) {
                 logging.log('Thermostat query failed, loading tokens')
                 renewTokens()
+                health.unhealthyEvent()
             } else if (body !== null) {
                 logging.log('Loading done:' + JSON.stringify(body))
                 const thermostatList = body.thermostatList
@@ -349,6 +372,7 @@ function doPoll() {
                     return
                 }
 
+                health.healthyEvent()
                 const thermostat = thermostatList[0]
                 const thermostatName = thermostat.name
                 const events = thermostat.events[0]
