@@ -102,7 +102,11 @@ client.on('message', (topic, message) => {
 })
 
 function setRefreshToken(token) {
-    redis.set('refresh-token', token)
+    if (token === null || token === undefined)
+        redis.del('refresh-token')
+    else
+        redis.set('refresh-token', token)
+
     health.healthyEvent()
 }
 
@@ -110,8 +114,12 @@ function getRefreshToken(callback) {
     redis.get('refresh-token', callback)
 }
 
-function setAccessToken(accessToken) {
-    redis.set('access-token', accessToken)
+function setAccessToken(token) {
+    if (token === null || token === undefined)
+        redis.del('access-token')
+    else
+        redis.set('access-token', token)
+
     health.healthyEvent()
 }
 
@@ -397,7 +405,10 @@ function doPoll() {
                 if (status !== null && status !== undefined) {
                     statusCode = status.code
                 }
-                if (statusCode === 14) {
+
+                if (err !== null) {
+
+                } else if (statusCode === 14) {
                     logging.log('Thermostat query failed, loading tokens')
                     renewTokens()
                     health.unhealthyEvent()
