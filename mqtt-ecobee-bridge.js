@@ -1,7 +1,7 @@
 // Requirements
 const mqtt = require('mqtt')
 const logging = require('./homeautomation-js-lib/logging.js')
-const mqtt_helpers = require('./homeautomation-js-lib/mqtt_helpers.js')
+require('./homeautomation-js-lib/mqtt_helpers.js')
 const health = require('./homeautomation-js-lib/health.js')
 const repeat = require('repeat')
 const request = require('request')
@@ -379,6 +379,12 @@ function renewTokens() {
 
 }
 
+function convertToCelsius(value) {
+    value = (Number(value) / 10)
+    value = f2c(value).toFixed(1)
+    return value
+}
+
 function doPoll() {
     if (waitingForPIN) return
 
@@ -460,11 +466,12 @@ function doPoll() {
                     logging.log('fan:' + fan)
 
 
-                    const thermostatTemperature = runtime.actualTemperature
+                    const thermostatTemperature = convertToCelsius(runtime.actualTemperature)
                     const thermostatHumidity = runtime.actualHumidity
-                    const desiredHeat = runtime.desiredHeat
                     const connected = runtime.connected
-                    const desiredCool = runtime.desiredCool
+                    const desiredHeat = convertToCelsius(runtime.desiredHeat)
+                    const desiredCool = convertToCelsius(runtime.desiredCool)
+                    const targetTemperature = (Number(desiredHeat) + Number(((desiredCool - desiredHeat) / 2.0)))
                     const currentMode = runtime.desiredFanMode
 
                     logging.log('thermostatTemperature:' + thermostatTemperature)
@@ -472,10 +479,17 @@ function doPoll() {
                     logging.log('connected:' + connected)
                     logging.log('desiredHeat:' + desiredHeat)
                     logging.log('desiredCool:' + desiredCool)
+                    logging.log('targetTemperature:' + targetTemperature)
                     logging.log('currentMode:' + currentMode)
 
                     logging.log('remoteSensors:' + remoteSensors)
-                        //'/environment/thermostat/home/target_temperature'
+
+                    client.smartPublish('/environment/thermostat/home/target_temperature', '' + targetTemperature)
+                    client.smartPublish('/environment/thermostat/home/connected', '' + connected)
+                    client.smartPublish('/environment/thermostat/home/desiredHeat', '' + desiredHeat)
+                    client.smartPublish('/environment/thermostat/home/desiredCool', '' + desiredCool)
+                    client.smartPublish('/environment/thermostat/home/mode', '' + currentMode)
+
                     remoteSensors.forEach(function(sensor) {
                         const sensorName = sensor.name
                         const capabilities = sensor.capability
@@ -484,12 +498,11 @@ function doPoll() {
                             var value = capability.value
 
                             if (type === 'temperature') {
-                                value = (Number(value) / 10)
-                                value = f2c(value).toFixed(1)
+                                value = convertToCelsius(value)
                             }
 
                             logging.log('   name:' + sensorName + ' type: ' + type + '    value: ' + value)
-                            mqtt_helpers.publish(client, ecobeeTopic + '/' + type + '/' + sensorName, value)
+                            client.smartPublish(ecobeeTopic + '/' + type + '/' + sensorName, '' + value)
                         }, this)
                     }, this)
 
