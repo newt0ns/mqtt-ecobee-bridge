@@ -448,16 +448,34 @@ function doPoll() {
                     const thermostat = thermostatList[0]
                     const thermostatName = thermostat.name
                     const events = thermostat.events[0]
+                    const runtime = thermostat.runtime
                     const mode = events.holdClimateRef
                     const fan = events.fan
                     const remoteSensors = thermostat.remoteSensors
 
                     logging.log('thermostatName:' + thermostatName)
+                    logging.log('runtime: ' + JSON.stringify(runtime))
+
                     logging.log('mode:' + mode)
                     logging.log('fan:' + fan)
+
+
+                    const thermostatTemperature = runtime.actualTemperature
+                    const thermostatHumidity = runtime.actualHumidity
+                    const desiredHeat = runtime.desiredHeat
+                    const connected = runtime.connected
+                    const desiredCool = runtime.desiredCool
+                    const currentMode = runtime.desiredFanMode
+
+                    logging.log('thermostatTemperature:' + thermostatTemperature)
+                    logging.log('thermostatHumidity:' + thermostatHumidity)
+                    logging.log('connected:' + connected)
+                    logging.log('desiredHeat:' + desiredHeat)
+                    logging.log('desiredCool:' + desiredCool)
+                    logging.log('currentMode:' + currentMode)
+
                     logging.log('remoteSensors:' + remoteSensors)
-
-
+                        //'/environment/thermostat/home/target_temperature'
                     remoteSensors.forEach(function(sensor) {
                         const sensorName = sensor.name
                         const capabilities = sensor.capability
