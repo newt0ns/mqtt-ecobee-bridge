@@ -91,15 +91,51 @@ client.on('message', (topic, message) => {
         setMode(target, function(err, body) {
             logging.log('error:' + err)
             logging.log('body:' + JSON.stringify(body))
+            handleResponseBody(body)
         })
     } else {
         setHVACMode(target, function(err, body) {
             logging.log('setHVACMode')
             logging.log('error:' + err)
             logging.log('body:' + JSON.stringify(body))
+            handleResponseBody(body)
         })
     }
 })
+
+function handleResponseBody(body) {
+    if (body === undefined || body === null) return
+
+    const status = body.status
+    if (status === undefined || status === null) return
+    const statusCode = status.code
+    logging.log('response status code: ' + statusCode)
+
+    switch (statusCode) {
+        case 1: // re-auth
+        case 2: // re-auth
+        case 14: // re-auth
+
+            logging.log(' => kicking re-auth')
+            periodicRefresh()
+            break
+        case 16: // needs new pin
+            setRefreshToken(null)
+            setAccessToken(null)
+
+            logging.log(' => news new pin, all is done')
+            publishAuthorizationState(0)
+            break
+
+        default:
+            break
+    }
+}
+
+
+function publishAuthorizationState(authState) {
+    client.smartPublish(ecobeeTopic + '/authorized', '' + authState)
+}
 
 function setRefreshToken(token) {
     if (token === null || token === undefined)
@@ -115,10 +151,11 @@ function getRefreshToken(callback) {
 }
 
 function setAccessToken(token) {
-    if (token === null || token === undefined)
+    if (token === null || token === undefined) {
         redis.del('access-token')
-    else
+    } else {
         redis.set('access-token', token)
+    }
 
     health.healthyEvent()
 }
@@ -294,6 +331,7 @@ function runLoop() {
 
             if (hasAccessToken) {
                 logging.log('Has access token')
+                publishAuthorizationState(1)
             }
 
             if (hasRefreshToken) {
@@ -310,7 +348,7 @@ function runLoop() {
                     requestPIN(function(err, body) {
                         const ecobeePin = body.ecobeePin
                         const accessToken = body.code
-
+                        publishAuthorizationState(0)
                         logging.log('')
                         logging.log('============================================================')
                         logging.log('=     Ecobee PIN Setup                                     =')
@@ -334,15 +372,21 @@ function runLoop() {
                                     const accessToken = body.access_token
 
                                     logging.log('Loaded tokens - refresh Token: ' + refreshToken + '   access Token: ' + accessToken)
-                                    setRefreshToken(refreshToken)
-                                    setAccessToken(accessToken)
-                                    health.healthyEvent()
-                                }
-
-                                if (err !== null && err !== undefined) {
+                                    if (refreshToken !== null) {
+                                        setRefreshToken(refreshToken)
+                                        setAccessToken(accessToken)
+                                        health.healthyEvent()
+                                        publishAuthorizationState(1)
+                                    } else {
+                                        logging.log('Failed to authorize')
+                                        health.unhealthyEvent()
+                                        publishAuthorizationState(0)
+                                    }
+                                } else if (err !== null && err !== undefined) {
                                     health.unhealthyEvent()
                                     setRefreshToken(null)
                                     setAccessToken(null)
+                                    publishAuthorizationState(0)
                                 }
                                 waitingForPIN = false
                             })
@@ -363,16 +407,17 @@ function renewTokens() {
         if (body !== null && body !== undefined) {
             const refreshToken = body.refresh_token
             const accessToken = body.access_token
-
+            handleResponseBody(body)
             logging.log('Reloaded tokens - refresh Token: ' + refreshToken + '   access Token: ' + accessToken)
-            setRefreshToken(refreshToken)
-            setAccessToken(accessToken)
+            if (refreshToken !== null && refreshToken !== undefined) {
+                setRefreshToken(refreshToken)
+                setAccessToken(accessToken)
+            }
+            publishAuthorizationState(1)
             health.healthyEvent()
         }
 
         if (err !== null && err !== undefined) {
-            setRefreshToken(null)
-            setAccessToken(null)
             health.unhealthyEvent()
         }
     })
@@ -404,6 +449,7 @@ function doPoll() {
                     logging.log('error:' + err)
                     logging.log('body:' + JSON.stringify(body))
                 }
+                handleResponseBody(body)
 
                 var status = body !== undefined ? body.status : null
                 var statusCode = null
@@ -484,11 +530,11 @@ function doPoll() {
 
                     logging.log('remoteSensors:' + remoteSensors)
 
-                    client.smartPublish('/environment/thermostat/home/target_temperature', '' + targetTemperature)
-                    client.smartPublish('/environment/thermostat/home/connected', '' + connected)
-                    client.smartPublish('/environment/thermostat/home/desiredHeat', '' + desiredHeat)
-                    client.smartPublish('/environment/thermostat/home/desiredCool', '' + desiredCool)
-                    client.smartPublish('/environment/thermostat/home/mode', '' + currentMode)
+                    client.smartPublish(ecobeeTopic + '/home/target_temperature', '' + targetTemperature)
+                    client.smartPublish(ecobeeTopic + '/home/connected', '' + connected)
+                    client.smartPublish(ecobeeTopic + '/home/desiredHeat', '' + desiredHeat)
+                    client.smartPublish(ecobeeTopic + '/home/desiredCool', '' + desiredCool)
+                    client.smartPublish(ecobeeTopic + '/home/mode', '' + currentMode)
 
                     remoteSensors.forEach(function(sensor) {
                         const sensorName = sensor.name
@@ -515,6 +561,4 @@ function doPoll() {
 }
 
 
-
 repeat(runLoop).every(30, 's').start.in(5, 'sec')
-repeat(periodicRefresh).every(8, 'm').start.in(10, 'sec')
