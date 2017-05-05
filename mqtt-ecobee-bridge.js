@@ -88,22 +88,33 @@ client.on('message', (topic, message) => {
     logging.log(' ' + topic + ':' + message)
     var target = '' + message
     if (topic.indexOf('/set/mode')) {
+        logging.log('setMode: ' + target)
         setMode(target, function(err, body) {
             logging.log('error:' + err)
             logging.log('body:' + JSON.stringify(body))
-            handleResponseBody(body)
+
+            // Only retry once
+            handleResponseBody(body, function() {
+                logging.log('setMode: ' + target)
+                setMode(target, null)
+            })
         })
     } else {
+        logging.log('setHVACMode: ' + target)
         setHVACMode(target, function(err, body) {
-            logging.log('setHVACMode')
             logging.log('error:' + err)
             logging.log('body:' + JSON.stringify(body))
-            handleResponseBody(body)
+
+            // Only retry once
+            handleResponseBody(body, function() {
+                logging.log('setHVACMode: ' + target)
+                setHVACMode(target, null)
+            })
         })
     }
 })
 
-function handleResponseBody(body) {
+function handleResponseBody(body, callback) {
     if (body === undefined || body === null) return
 
     const status = body.status
@@ -117,9 +128,10 @@ function handleResponseBody(body) {
         case 14: // re-auth
 
             logging.log(' => kicking re-auth')
-            periodicRefresh()
+            periodicRefresh(callback)
             break
         case 16: // needs new pin
+            health.unhealthyEvent()
             setRefreshToken(null)
             setAccessToken(null)
 
@@ -177,7 +189,6 @@ function requestPIN(callback) {
                 logging.log('response:' + response)
                 logging.log('body:' + JSON.stringify(body))
             }
-
 
             if (callback !== null && callback !== undefined) {
                 callback(err, body)
@@ -310,13 +321,13 @@ function setMode(mode, callback) {
 
 var hasRequestedPIN = false
 
-function periodicRefresh() {
+function periodicRefresh(callback) {
     getRefreshToken(function(err, ecobeeRefreshToken) {
         var hasRefreshToken = ecobeeRefreshToken !== null
 
         if (hasRefreshToken) {
             logging.log('Refreshing tokens')
-            renewTokens()
+            renewTokens(callback)
         }
     })
 }
@@ -400,18 +411,25 @@ function runLoop() {
     })
 }
 
-function renewTokens() {
+function renewTokens(callback) {
     logging.log('Renewing tokens')
 
     queryAccessToken(function(err, body) {
         if (body !== null && body !== undefined) {
             const refreshToken = body.refresh_token
             const accessToken = body.access_token
-            handleResponseBody(body)
+
             logging.log('Reloaded tokens - refresh Token: ' + refreshToken + '   access Token: ' + accessToken)
+
+            handleResponseBody(body)
+
             if (refreshToken !== null && refreshToken !== undefined) {
                 setRefreshToken(refreshToken)
                 setAccessToken(accessToken)
+
+                if (callback !== null && callback !== undefined) {
+                    callback()
+                }
             }
             publishAuthorizationState(1)
             health.healthyEvent()
@@ -449,14 +467,8 @@ function doPoll() {
                     logging.log('error:' + err)
                     logging.log('body:' + JSON.stringify(body))
                 }
+
                 handleResponseBody(body)
-
-                var status = body !== undefined ? body.status : null
-                var statusCode = null
-
-                if (status !== null && status !== undefined) {
-                    statusCode = status.code
-                }
 
                 if (err !== null) {
                     if (
@@ -480,14 +492,8 @@ function doPoll() {
                         return
                     }
 
-                } else if (statusCode === 14) {
-                    logging.log('Thermostat query failed, loading tokens')
-                    renewTokens()
-                    health.unhealthyEvent()
                 } else if (err !== null) {
-                    logging.log('Thermostat query failed, loading tokens')
-                    renewTokens()
-                    health.unhealthyEvent()
+                    logging.log('Thermostat query failed')
                 } else if (body !== null) {
                     logging.log('Loading done:' + JSON.stringify(body))
                     const thermostatList = body.thermostatList
