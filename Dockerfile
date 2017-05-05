@@ -1,8 +1,11 @@
-FROM node:6
+FROM node:alpine
 
 RUN mkdir -p /usr/node_app
 COPY . /usr/node_app
 WORKDIR /usr/node_app
 RUN npm install --production
 
-CMD ["npm", "start"]
+RUN npm install pm2@next -g
+
+# Start process.yml
+CMD ["pm2-docker", "mqtt-ecobee-bridge.js"]
