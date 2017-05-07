@@ -16,23 +16,18 @@ const ecobeeClientID = process.env.ECOBEE_CLIENT_ID
 const redisHost = process.env.REDIS_HOST
 const redisPort = process.env.REDIS_PORT
 const redisDB = process.env.REDIS_DATABASE
-const syslogHost = process.env.SYSLOG_HOST
-const syslogPort = process.env.SYSLOG_PORT
 
 const healthCheckPort = process.env.HEALTH_CHECK_PORT
 const healthCheckTime = process.env.HEALTH_CHECK_TIME
 const healthCheckURL = process.env.HEALTH_CHECK_URL
+
 if (healthCheckPort !== null && healthCheckTime !== null && healthCheckURL !== null &&
     healthCheckPort !== undefined && healthCheckTime !== undefined && healthCheckURL !== undefined) {
-    logging.log('Starting health checks')
+    logging.info('Starting health checks')
     health.startHealthChecks(healthCheckURL, healthCheckPort, healthCheckTime)
 } else {
-    logging.log('Not starting health checks')
+    logging.info('Not starting health checks')
 }
-
-// Set up modules
-logging.set_enabled(true)
-logging.setRemoteHost(syslogHost, syslogPort)
 
 // Setup MQTT
 var client = mqtt.connect(host)
@@ -64,50 +59,51 @@ const redis = Redis.createClient({
 // redis callbacks
 
 redis.on('error', function(err) {
-    logging.log('redis error ' + err)
+    logging.info('redis error ' + err, { failure: 'redis', error: err })
 })
 
 redis.on('connect', function() {
-    logging.log('redis connected')
+    logging.info('redis connected', { module: 'mqtt-ecobee-bridge' })
 })
 
 client.on('connect', () => {
-    logging.log('Reconnecting...\n')
+    logging.info('Reconnecting...\n')
     client.subscribe(ecobeeTopic + '/set/mode')
     client.subscribe(ecobeeTopic + '/set/hvac')
     health.healthyEvent()
 })
 
 client.on('disconnect', () => {
-    logging.log('Reconnecting...\n')
+    logging.info('Reconnecting...\n')
     client.connect(host)
     health.unhealthyEvent()
 })
 
 client.on('message', (topic, message) => {
-    logging.log(' ' + topic + ':' + message)
+    logging.info(' ' + topic + ':' + message, { topic: topic, value: message })
     var target = '' + message
     if (topic.indexOf('/set/mode')) {
-        logging.log('setMode: ' + target)
+        logging.info('setMode: ' + target, { action: 'setmode', value: target })
         setMode(target, function(err, body) {
-            logging.log('error:' + err)
-            logging.log('body:' + JSON.stringify(body))
+            logging.info('error:' + err, { error: err })
+            logging.info('body:' + JSON.stringify(body))
+            logging.info('setMode: ' + target, { action: 'setmode', result: 'success' })
 
             // Only retry once
             handleResponseBody(body, function() {
-                logging.log('setMode: ' + target)
+                logging.info('setMode: ' + target)
                 setMode(target, null)
             })
         })
     } else {
-        logging.log('setHVACMode: ' + target)
+        logging.info('setHVACMode: ' + target, { action: 'sethvacmode', result: target })
         setHVACMode(target, function(err, body) {
-            logging.log('error:' + err)
-            logging.log('body:' + JSON.stringify(body))
+            logging.info('error:' + err)
+            logging.info('body:' + JSON.stringify(body))
 
             // Only retry once
             handleResponseBody(body, function() {
-                logging.log('setHVACMode: ' + target)
+                logging.info('setHVACMode: ' + target)
                 setHVACMode(target, null)
             })
         })
@@ -120,14 +116,14 @@ function handleResponseBody(body, callback) {
     const status = body.status
     if (status === undefined || status === null) return
     const statusCode = status.code
-    logging.log('response status code: ' + statusCode)
+    logging.info('response status code: ' + statusCode, { 'response-code': statusCode })
 
     switch (statusCode) {
         case 1: // re-auth
         case 2: // re-auth
         case 14: // re-auth
 
-            logging.log(' => kicking re-auth')
+            logging.info(' => kicking re-auth', { action: 're-authenticate' })
             periodicRefresh(callback)
             break
         case 16: // needs new pin
@@ -135,7 +131,7 @@ function handleResponseBody(body, callback) {
             setRefreshToken(null)
             setAccessToken(null)
 
-            logging.log(' => news new pin, all is done')
+            logging.info(' => news new pin, all is done', { action: 'new-pin-request' })
             publishAuthorizationState(0)
             break
 
@@ -180,14 +176,14 @@ function requestPIN(callback) {
     // GET
     var ecobeeGetPinURL = 'https://api.ecobee.com/authorize?response_type=ecobeePin&client_id=' + ecobeeClientID + '&scope=smartWrite'
 
-    logging.log('queryPinURL: ' + ecobeeGetPinURL)
+    logging.info('queryPinURL: ' + ecobeeGetPinURL, { action: 'request-pin' })
 
     request.get({ url: ecobeeGetPinURL, json: true },
         function(err, response, body) {
             if (err !== null && err !== undefined) {
-                logging.log('error:' + err)
-                logging.log('response:' + response)
-                logging.log('body:' + JSON.stringify(body))
+                logging.info('error:' + err)
+                logging.info('response:' + response)
+                logging.info('body:' + JSON.stringify(body))
             }
 
             if (callback !== null && callback !== undefined) {
@@ -199,17 +195,17 @@ function requestPIN(callback) {
 function queryRefreshToken(callback) {
     // POST
     getAccessToken(function(err, ecobeeAccessToken) {
-        logging.log('ecobeeAccessToken: ' + ecobeeAccessToken)
+        logging.info('ecobeeAccessToken: ' + ecobeeAccessToken)
         var ecobeeGetRefreshTokenURL = 'https://api.ecobee.com/token?grant_type=ecobeePin&code=' + ecobeeAccessToken + '&client_id=' + ecobeeClientID
 
-        logging.log('queryRefreshToken: ' + ecobeeGetRefreshTokenURL)
+        logging.info('queryRefreshToken: ' + ecobeeGetRefreshTokenURL, { action: 'get-refresh-token' })
 
         request.post({ url: ecobeeGetRefreshTokenURL, json: true },
             function(err, response, body) {
                 if (err !== null && err !== undefined) {
-                    logging.log('error:' + err)
-                    logging.log('response:' + response)
-                    logging.log('body:' + JSON.stringify(body))
+                    logging.info('error:' + err)
+                    logging.info('response:' + response)
+                    logging.info('body:' + JSON.stringify(body))
                 }
 
                 if (callback !== null && callback !== undefined) {
@@ -224,14 +220,14 @@ function queryAccessToken(callback) {
     getRefreshToken(function(err, ecobeeRefreshToken) {
         var ecobeeGetAccessTokenURL = 'https://api.ecobee.com/token?grant_type=refresh_token&code=' + ecobeeRefreshToken + '&client_id=' + ecobeeClientID
 
-        logging.log('queryAccessToken: ' + ecobeeGetAccessTokenURL)
+        logging.info('queryAccessToken: ' + ecobeeGetAccessTokenURL, { action: 'get-access-token' })
 
         request.post({ url: ecobeeGetAccessTokenURL, json: true },
             function(err, response, body) {
                 if (err !== null && err !== undefined) {
-                    logging.log('error:' + err)
-                    logging.log('response:' + response)
-                    logging.log('body:' + JSON.stringify(body))
+                    logging.info('error:' + err)
+                    logging.info('response:' + response)
+                    logging.info('body:' + JSON.stringify(body))
                 }
 
                 if (callback !== null && callback !== undefined) {
@@ -248,14 +244,14 @@ function queryThermostats(callback) {
     getAccessToken(function(err, ecobeeAccessToken) {
         var ecobeeGetThermostatInfoURL = 'https://api.ecobee.com/1/thermostat?format=json&body=%7B%22selection%22%3A%7B%22includeAlerts%22%3A%22false%22%2C%22selectionType%22%3A%22registered%22%2C%22selectionMatch%22%3A%22%22%2C%22includeEvents%22%3A%22false%22%2C%22includeSettings%22%3A%22false%22%2C%22includeRuntime%22%3A%22true%22%2C%22includeSensors%22%3A%22true%22%2C%22includeExtendedRuntime%22%3A%22true%22%2C%22includeEquipmentStatus%22%3A%22true%22%2C%22includeEvents%22%3A%22true%22%7D%7D'
 
-        logging.log('queryThermostats')
+        logging.info('queryThermostats', { action: 'thermostat-info' })
 
         request.get({ url: ecobeeGetThermostatInfoURL, json: true },
             function(err, response, body) {
                 if (err !== null && err !== undefined) {
-                    logging.log('error:' + err)
-                    logging.log('response:' + response)
-                    logging.log('body:' + JSON.stringify(body))
+                    logging.info('error:' + err)
+                    logging.info('response:' + response)
+                    logging.info('body:' + JSON.stringify(body))
                 }
 
                 if (callback !== null && callback !== undefined) {
@@ -274,16 +270,16 @@ function setHVACMode(mode, callback) {
     getAccessToken(function(err, ecobeeAccessToken) {
         var ecobeeActionURL = 'https://api.ecobee.com/1/thermostat?format=json'
 
-        logging.log('setHVACMode: ' + mode)
+        logging.info('setHVACMode: ' + mode)
 
         var postBody = { 'selection': { 'selectionType': 'registered', 'selectionMatch': '' }, 'thermostat': { 'settings': { 'hvacMode': mode } } }
 
         request.post({ url: ecobeeActionURL, body: postBody, json: true },
             function(err, response, body) {
                 if (err !== null && err !== undefined) {
-                    logging.log('error:' + err)
-                    logging.log('response:' + response)
-                    logging.log('body:' + JSON.stringify(body))
+                    logging.info('error:' + err)
+                    logging.info('response:' + response)
+                    logging.info('body:' + JSON.stringify(body))
 
                 }
                 if (callback !== null && callback !== undefined) {
@@ -301,16 +297,16 @@ function setMode(mode, callback) {
     getAccessToken(function(err, ecobeeAccessToken) {
         var ecobeeActionURL = 'https://api.ecobee.com/1/thermostat?format=json'
 
-        logging.log('setMode: ' + mode)
+        logging.info('setMode: ' + mode)
 
         var postBody = { 'selection': { 'selectionType': 'registered', 'selectionMatch': '' }, 'functions': [{ 'type': 'setHold', 'params': { 'holdType': 'indefinite', 'holdClimateRef': mode } }] }
 
         request.post({ url: ecobeeActionURL, body: postBody, json: true },
             function(err, response, body) {
                 if (err !== null && err !== undefined) {
-                    logging.log('error:' + err)
-                    logging.log('response:' + response)
-                    logging.log('body:' + JSON.stringify(body))
+                    logging.info('error:' + err)
+                    logging.info('response:' + response)
+                    logging.info('body:' + JSON.stringify(body))
                 }
                 if (callback !== null && callback !== undefined) {
                     callback(err, body)
@@ -326,7 +322,7 @@ function periodicRefresh(callback) {
         var hasRefreshToken = ecobeeRefreshToken !== null
 
         if (hasRefreshToken) {
-            logging.log('Refreshing tokens')
+            logging.info('Refreshing tokens')
             renewTokens(callback)
         }
     })
@@ -341,12 +337,12 @@ function runLoop() {
             var hasRefreshToken = ecobeeRefreshToken !== null
 
             if (hasAccessToken) {
-                logging.log('Has access token')
+                logging.debug('Has access token')
                 publishAuthorizationState(1)
             }
 
             if (hasRefreshToken) {
-                logging.log('Has refresh token')
+                logging.debug('Has refresh token')
             }
 
             if (hasAccessToken) {
@@ -360,36 +356,36 @@ function runLoop() {
                         const ecobeePin = body.ecobeePin
                         const accessToken = body.code
                         publishAuthorizationState(0)
-                        logging.log('')
-                        logging.log('============================================================')
-                        logging.log('=     Ecobee PIN Setup                                     =')
-                        logging.log('=                                                          =')
-                        logging.log('=        Ecobee Pin: ' + ecobeePin + '                                  =')
-                        logging.log('=                                                          =')
-                        logging.log('=        In 60 seconds access token will refresh...        =')
-                        logging.log('=                                                          =')
-                        logging.log('============================================================')
-                        logging.log('')
-                        logging.log('')
+                        logging.debug('')
+                        logging.debug('============================================================')
+                        logging.debug('=     Ecobee PIN Setup                                     =')
+                        logging.debug('=                                                          =')
+                        logging.debug('=        Ecobee Pin: ' + ecobeePin + '                                  =')
+                        logging.debug('=                                                          =')
+                        logging.debug('=        In 60 seconds access token will refresh...        =')
+                        logging.debug('=                                                          =')
+                        logging.debug('============================================================')
+                        logging.debug('')
+                        logging.debug('')
                         health.healthyEvent()
 
                         setAccessToken(accessToken)
 
                         setTimeout(function() {
-                            logging.log('... querying tokens')
+                            logging.debug('... querying tokens')
                             queryRefreshToken(function(err, body) {
                                 if (body !== null && body !== undefined) {
                                     const refreshToken = body.refresh_token
                                     const accessToken = body.access_token
 
-                                    logging.log('Loaded tokens - refresh Token: ' + refreshToken + '   access Token: ' + accessToken)
+                                    logging.info('Loaded tokens', { 'access-token': accessToken, 'refresh-token': refreshToken })
                                     if (refreshToken !== null) {
                                         setRefreshToken(refreshToken)
                                         setAccessToken(accessToken)
                                         health.healthyEvent()
                                         publishAuthorizationState(1)
                                     } else {
-                                        logging.log('Failed to authorize')
+                                        logging.error('Failed to authorize')
                                         health.unhealthyEvent()
                                         publishAuthorizationState(0)
                                     }
@@ -412,14 +408,14 @@ function runLoop() {
 }
 
 function renewTokens(callback) {
-    logging.log('Renewing tokens')
+    logging.info('Renewing tokens')
 
     queryAccessToken(function(err, body) {
         if (body !== null && body !== undefined) {
             const refreshToken = body.refresh_token
             const accessToken = body.access_token
 
-            logging.log('Reloaded tokens - refresh Token: ' + refreshToken + '   access Token: ' + accessToken)
+            logging.info('Reloaded tokens', { 'access-token': accessToken, 'refresh-token': refreshToken })
 
             handleResponseBody(body)
 
@@ -459,13 +455,13 @@ function doPoll() {
 
             if (!hasAccessToken) return
 
-            logging.log('polling')
+            logging.info('polling')
 
             queryThermostats(function(err, body) {
-                logging.log('Loaded thermostats')
+                logging.info('Loaded thermostats')
                 if (err !== null) {
-                    logging.log('error:' + err)
-                    logging.log('body:' + JSON.stringify(body))
+                    logging.info('error:' + err)
+                    logging.info('body:' + JSON.stringify(body))
                 }
 
                 handleResponseBody(body)
@@ -488,16 +484,16 @@ function doPoll() {
                         err.code === 'ECONNREFUSED'
                     ) {
                         health.unhealthyEvent()
-                        logging.log('request error:' + err)
+                        logging.error('request error:' + err)
                         return
                     }
 
                 } else if (err !== null) {
-                    logging.log('Thermostat query failed')
+                    logging.error('Thermostat query failed')
                 } else if (body !== null) {
-                    logging.log('Loading done:' + JSON.stringify(body))
+                    logging.debug('Loading done:' + JSON.stringify(body))
                     const thermostatList = body.thermostatList
-                    logging.log('thermostatList:' + thermostatList)
+                    logging.debug('thermostatList:' + thermostatList)
                     if (thermostatList === null || thermostatList === undefined) {
                         return
                     }
@@ -508,15 +504,7 @@ function doPoll() {
                     const events = thermostat.events[0]
                     const runtime = thermostat.runtime
                     const mode = events.holdClimateRef
-                    const fan = events.fan
                     const remoteSensors = thermostat.remoteSensors
-
-                    logging.log('thermostatName:' + thermostatName)
-                    logging.log('runtime: ' + JSON.stringify(runtime))
-
-                    logging.log('mode:' + mode)
-                    logging.log('fan:' + fan)
-
 
                     const thermostatTemperature = convertToCelsius(runtime.actualTemperature)
                     const thermostatHumidity = runtime.actualHumidity
@@ -526,15 +514,20 @@ function doPoll() {
                     const targetTemperature = (Number(desiredHeat) + Number(((desiredCool - desiredHeat) / 2.0)))
                     const currentMode = runtime.desiredFanMode
 
-                    logging.log('thermostatTemperature:' + thermostatTemperature)
-                    logging.log('thermostatHumidity:' + thermostatHumidity)
-                    logging.log('connected:' + connected)
-                    logging.log('desiredHeat:' + desiredHeat)
-                    logging.log('desiredCool:' + desiredCool)
-                    logging.log('targetTemperature:' + targetTemperature)
-                    logging.log('currentMode:' + currentMode)
+                    logging.info('thermostat update', {
+                        event: 'thermostat-update',
+                        name: thermostatName,
+                        runtime: runtime,
+                        mode: mode,
+                        desiredHeat: desiredHeat,
+                        desiredCool: desiredCool,
+                        connected: connected,
+                        temperature: thermostatTemperature,
+                        humidity: thermostatHumidity,
+                        'target-temperature': targetTemperature,
+                        fan: currentMode
+                    })
 
-                    logging.log('remoteSensors:' + remoteSensors)
 
                     client.smartPublish(ecobeeTopic + '/home/target_temperature', '' + targetTemperature)
                     client.smartPublish(ecobeeTopic + '/home/connected', '' + connected)
@@ -545,6 +538,7 @@ function doPoll() {
                     remoteSensors.forEach(function(sensor) {
                         const sensorName = sensor.name
                         const capabilities = sensor.capability
+                        var newCaps = {}
                         capabilities.forEach(function(capability) {
                             const type = capability.type
                             var value = capability.value
@@ -553,15 +547,17 @@ function doPoll() {
                                 value = convertToCelsius(value)
                             }
 
-                            logging.log('   name:' + sensorName + ' type: ' + type + '    value: ' + value)
+                            newCaps[type] = value
                             client.smartPublish(ecobeeTopic + '/' + type + '/' + sensorName, '' + value)
                         }, this)
+                        newCaps['name'] = sensorName
+                        newCaps['event'] = 'sensor-update'
+                        logging.info('   sensor update', newCaps)
                     }, this)
-
                 }
             })
         } catch (error) {
-            logging.log('   **** caught error during poll: ' + error)
+            logging.error('   **** caught error during poll: ' + error, { error: '' + error })
         }
     })
 }
