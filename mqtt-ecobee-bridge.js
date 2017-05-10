@@ -463,9 +463,9 @@ function doPoll() {
                     health.healthyEvent()
                     const thermostat = thermostatList[0]
                     const thermostatName = thermostat.name
-                    const events = thermostat.events[0]
+                    //const events = thermostat.events[0]
                     const runtime = thermostat.runtime
-                    const mode = events.holdClimateRef
+                   // const mode = events.holdClimateRef
                     const remoteSensors = thermostat.remoteSensors
 
                     const thermostatTemperature = convertToCelsius(runtime.actualTemperature)
@@ -480,7 +480,7 @@ function doPoll() {
                         event: 'thermostat-update',
                         name: thermostatName,
                         runtime: runtime,
-                        mode: mode,
+                       // mode: mode,
                         desiredHeat: desiredHeat,
                         desiredCool: desiredCool,
                         connected: connected,
