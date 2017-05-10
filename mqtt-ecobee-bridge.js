@@ -168,6 +168,7 @@ function requestPIN(callback) {
         })
 }
 
+
 function queryRefreshToken(callback) {
     // POST
     getAccessToken(function(err, ecobeeAccessToken) {
