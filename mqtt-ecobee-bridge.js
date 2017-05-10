@@ -24,24 +24,33 @@ const healthCheckURL = process.env.HEALTH_CHECK_URL
 if (!_.isNil(healthCheckPort) && !_.isNil(healthCheckTime) && !_.isNil(healthCheckURL)) {
     health.startHealthChecks(healthCheckURL, healthCheckPort, healthCheckTime)
 }
+repeat(runLoop).every(30, 's').start.in(5, 'sec')
 
 // Setup MQTT
 var client = mqtt.setupClient(
     function() {
-        client.subscribe(ecobeeTopic + '/set/mode')
-        client.subscribe(ecobeeTopic + '/set/hvac')
+        const topics = [ecobeeTopic + '/mode/set', ecobeeTopic + '/hvac/set']
+        logging.debug('Connected, subscribing ')
+        topics.forEach(function(topic) {
+            logging.debug(' => Subscribing to: ' + topic)
+            client.subscribe(topic)
+        }, this)
+
+
         health.healthyEvent()
     },
     function() {
         health.unhealthyEvent()
-
     }
 )
+
 var waitingForPIN = false
 
-const redis = Redis.setupClient()
+const redis = Redis.setupClient(null)
+logging.debug('redis: ' + redis)
 
 client.on('message', (topic, message) => {
+    logging.debug(' ' + topic + ':' + message, { topic: topic, value: message })
     logging.info(' ' + topic + ':' + message, { topic: topic, value: message })
     var target = '' + message
     if (topic.indexOf('/set/mode')) {
@@ -73,6 +82,7 @@ client.on('message', (topic, message) => {
 })
 
 function handleResponseBody(body, callback) {
+    logging.debug('handleResponseBody')
     if (_.isNil(body)) return
 
     const status = body.status
@@ -104,10 +114,12 @@ function handleResponseBody(body, callback) {
 
 
 function publishAuthorizationState(authState) {
+    logging.debug('publishAuthorizationState')
     client.smartPublish(ecobeeTopic + '/authorized', '' + authState)
 }
 
 function setRefreshToken(token) {
+    logging.debug('setRefreshToken')
     if (_.isNil(token))
         redis.del('refresh-token')
     else
@@ -117,10 +129,12 @@ function setRefreshToken(token) {
 }
 
 function getRefreshToken(callback) {
+    logging.debug('getRefreshToken')
     redis.get('refresh-token', callback)
 }
 
 function setAccessToken(token) {
+    logging.debug('setAccessToken')
     if (_.isNil(token)) {
         redis.del('access-token')
     } else {
@@ -292,6 +306,7 @@ function periodicRefresh(callback) {
 
 function runLoop() {
     if (waitingForPIN) return
+
     getAccessToken(function(err, ecobeeAccessToken) {
         getRefreshToken(function(err, ecobeeRefreshToken) {
 
@@ -409,11 +424,9 @@ function convertToCelsius(value) {
 function doPoll() {
     if (waitingForPIN) return
 
-
     getAccessToken(function(err, ecobeeAccessToken) {
         try {
             var hasAccessToken = !_.isNil(ecobeeAccessToken)
-
 
             if (!hasAccessToken) return
 
@@ -465,7 +478,7 @@ function doPoll() {
                     const thermostatName = thermostat.name
                     const events = thermostat.events[0]
                     const runtime = thermostat.runtime
-                    const mode = events.holdClimateRef
+                    const mode = _.isNil(events) ? 'schedule' : events.holdClimateRef
                     const remoteSensors = thermostat.remoteSensors
 
                     const thermostatTemperature = convertToCelsius(runtime.actualTemperature)
@@ -523,6 +536,3 @@ function doPoll() {
         }
     })
 }
-
-
-repeat(runLoop).every(30, 's').start.in(5, 'sec')
