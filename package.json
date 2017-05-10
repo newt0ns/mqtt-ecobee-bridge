@@ -11,6 +11,7 @@
         "start": "node mqtt-ecobee-bridge.js"
     },
     "dependencies": {
+        "lodash": "^4.17.4",
         "winston": "^2.3.1",
         "winston-logstash": "^0.3.0",
         "redis": "^2.7.1",

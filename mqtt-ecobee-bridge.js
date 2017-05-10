@@ -1,83 +1,45 @@
 // Requirements
 const mqtt = require('mqtt')
 const logging = require('./homeautomation-js-lib/logging.js')
-require('./homeautomation-js-lib/mqtt_helpers.js')
 const health = require('./homeautomation-js-lib/health.js')
 const repeat = require('repeat')
 const request = require('request')
+const _ = require('lodash')
 const f2c = require('fahrenheit-to-celsius')
 const Redis = require('redis')
 
+require('./homeautomation-js-lib/mqtt_helpers.js')
+require('./homeautomation-js-lib/redis_helpers.js')
+
 // create a Configstore instance with an unique ID e.g.
 // Package name and optionally some default values
-const host = process.env.MQTT_HOST
+
 const ecobeeTopic = process.env.ECOBEE_TOPIC
 const ecobeeClientID = process.env.ECOBEE_CLIENT_ID
-const redisHost = process.env.REDIS_HOST
-const redisPort = process.env.REDIS_PORT
-const redisDB = process.env.REDIS_DATABASE
 
 const healthCheckPort = process.env.HEALTH_CHECK_PORT
 const healthCheckTime = process.env.HEALTH_CHECK_TIME
 const healthCheckURL = process.env.HEALTH_CHECK_URL
 
-if (healthCheckPort !== null && healthCheckTime !== null && healthCheckURL !== null &&
-    healthCheckPort !== undefined && healthCheckTime !== undefined && healthCheckURL !== undefined) {
-    logging.info('Starting health checks')
+if (!_.isNil(healthCheckPort) && !_.isNil(healthCheckTime) && !_.isNil(healthCheckURL)) {
     health.startHealthChecks(healthCheckURL, healthCheckPort, healthCheckTime)
-} else {
-    logging.info('Not starting health checks')
 }
 
 // Setup MQTT
-var client = mqtt.connect(host)
+var client = mqtt.setupClient(
+    function() {
+        client.subscribe(ecobeeTopic + '/set/mode')
+        client.subscribe(ecobeeTopic + '/set/hvac')
+        health.healthyEvent()
+    },
+    function() {
+        health.unhealthyEvent()
+
+    }
+)
 var waitingForPIN = false
 
-// MQTT Observation
-const redis = Redis.createClient({
-    host: redisHost,
-    port: redisPort,
-    db: redisDB,
-    retry_strategy: function(options) {
-        if (options.error && options.error.code === 'ECONNREFUSED') {
-            // End reconnecting on a specific error and flush all commands with a individual error
-            return new Error('The server refused the connection')
-        }
-        if (options.total_retry_time > 1000 * 60 * 60) {
-            // End reconnecting after a specific timeout and flush all commands with a individual error
-            return new Error('Retry time exhausted')
-        }
-        if (options.times_connected > 10) {
-            // End reconnecting with built in error
-            return undefined
-        }
-        // reconnect after
-        return Math.min(options.attempt * 100, 3000)
-    }
-})
-
-// redis callbacks
-
-redis.on('error', function(err) {
-    logging.info('redis error ' + err, { failure: 'redis', error: err })
-})
-
-redis.on('connect', function() {
-    logging.info('redis connected', { module: 'mqtt-ecobee-bridge' })
-})
-
-client.on('connect', () => {
-    logging.info('Reconnecting...\n')
-    client.subscribe(ecobeeTopic + '/set/mode')
-    client.subscribe(ecobeeTopic + '/set/hvac')
-    health.healthyEvent()
-})
-
-client.on('disconnect', () => {
-    logging.info('Reconnecting...\n')
-    client.connect(host)
-    health.unhealthyEvent()
-})
+const redis = Redis.setupClient()
 
 client.on('message', (topic, message) => {
     logging.info(' ' + topic + ':' + message, { topic: topic, value: message })
@@ -111,10 +73,10 @@ client.on('message', (topic, message) => {
 })
 
 function handleResponseBody(body, callback) {
-    if (body === undefined || body === null) return
+    if (_.isNil(body)) return
 
     const status = body.status
-    if (status === undefined || status === null) return
+    if (_.isNil(status)) return
     const statusCode = status.code
     logging.info('response status code: ' + statusCode, { 'response-code': statusCode })
 
@@ -146,7 +108,7 @@ function publishAuthorizationState(authState) {
 }
 
 function setRefreshToken(token) {
-    if (token === null || token === undefined)
+    if (_.isNil(token))
         redis.del('refresh-token')
     else
         redis.set('refresh-token', token)
@@ -159,7 +121,7 @@ function getRefreshToken(callback) {
 }
 
 function setAccessToken(token) {
-    if (token === null || token === undefined) {
+    if (_.isNil(token)) {
         redis.del('access-token')
     } else {
         redis.set('access-token', token)
@@ -180,13 +142,13 @@ function requestPIN(callback) {
 
     request.get({ url: ecobeeGetPinURL, json: true },
         function(err, response, body) {
-            if (err !== null && err !== undefined) {
+            if (!_.isNil(err)) {
                 logging.info('error:' + err)
                 logging.info('response:' + response)
                 logging.info('body:' + JSON.stringify(body))
             }
 
-            if (callback !== null && callback !== undefined) {
+            if (!_.isNil(callback)) {
                 callback(err, body)
             }
         })
@@ -202,13 +164,13 @@ function queryRefreshToken(callback) {
 
         request.post({ url: ecobeeGetRefreshTokenURL, json: true },
             function(err, response, body) {
-                if (err !== null && err !== undefined) {
+                if (!_.isNil(err)) {
                     logging.info('error:' + err)
                     logging.info('response:' + response)
                     logging.info('body:' + JSON.stringify(body))
                 }
 
-                if (callback !== null && callback !== undefined) {
+                if (!_.isNil(callback)) {
                     callback(err, body)
                 }
             }).auth(null, null, true, ecobeeAccessToken)
@@ -224,13 +186,13 @@ function queryAccessToken(callback) {
 
         request.post({ url: ecobeeGetAccessTokenURL, json: true },
             function(err, response, body) {
-                if (err !== null && err !== undefined) {
+                if (!_.isNil(err)) {
                     logging.info('error:' + err)
                     logging.info('response:' + response)
                     logging.info('body:' + JSON.stringify(body))
                 }
 
-                if (callback !== null && callback !== undefined) {
+                if (!_.isNil(callback)) {
                     callback(err, body)
                 }
             }).auth(null, null, true, ecobeeRefreshToken)
@@ -248,13 +210,13 @@ function queryThermostats(callback) {
 
         request.get({ url: ecobeeGetThermostatInfoURL, json: true },
             function(err, response, body) {
-                if (err !== null && err !== undefined) {
+                if (!_.isNil(err)) {
                     logging.info('error:' + err)
                     logging.info('response:' + response)
                     logging.info('body:' + JSON.stringify(body))
                 }
 
-                if (callback !== null && callback !== undefined) {
+                if (!_.isNil(callback)) {
                     callback(err, body)
                 }
             }).auth(null, null, true, ecobeeAccessToken)
@@ -276,13 +238,13 @@ function setHVACMode(mode, callback) {
 
         request.post({ url: ecobeeActionURL, body: postBody, json: true },
             function(err, response, body) {
-                if (err !== null && err !== undefined) {
+                if (!_.isNil(err)) {
                     logging.info('error:' + err)
                     logging.info('response:' + response)
                     logging.info('body:' + JSON.stringify(body))
 
                 }
-                if (callback !== null && callback !== undefined) {
+                if (!_.isNil(callback)) {
                     callback(err, body)
                 }
             }).auth(null, null, true, ecobeeAccessToken)
@@ -303,12 +265,12 @@ function setMode(mode, callback) {
 
         request.post({ url: ecobeeActionURL, body: postBody, json: true },
             function(err, response, body) {
-                if (err !== null && err !== undefined) {
+                if (!_.isNil(err)) {
                     logging.info('error:' + err)
                     logging.info('response:' + response)
                     logging.info('body:' + JSON.stringify(body))
                 }
-                if (callback !== null && callback !== undefined) {
+                if (!_.isNil(callback)) {
                     callback(err, body)
                 }
             }).auth(null, null, true, ecobeeAccessToken)
@@ -319,7 +281,7 @@ var hasRequestedPIN = false
 
 function periodicRefresh(callback) {
     getRefreshToken(function(err, ecobeeRefreshToken) {
-        var hasRefreshToken = ecobeeRefreshToken !== null
+        var hasRefreshToken = !_.isNil(ecobeeRefreshToken)
 
         if (hasRefreshToken) {
             logging.info('Refreshing tokens')
@@ -333,8 +295,8 @@ function runLoop() {
     getAccessToken(function(err, ecobeeAccessToken) {
         getRefreshToken(function(err, ecobeeRefreshToken) {
 
-            var hasAccessToken = ecobeeAccessToken !== null
-            var hasRefreshToken = ecobeeRefreshToken !== null
+            var hasAccessToken = !_.isNil(ecobeeAccessToken)
+            var hasRefreshToken = !_.isNil(ecobeeRefreshToken)
 
             if (hasAccessToken) {
                 logging.debug('Has access token')
@@ -374,12 +336,12 @@ function runLoop() {
                         setTimeout(function() {
                             logging.debug('... querying tokens')
                             queryRefreshToken(function(err, body) {
-                                if (body !== null && body !== undefined) {
+                                if (!_.isNil(body)) {
                                     const refreshToken = body.refresh_token
                                     const accessToken = body.access_token
 
                                     logging.info('Loaded tokens', { 'access-token': accessToken, 'refresh-token': refreshToken })
-                                    if (refreshToken !== null) {
+                                    if (!_.isNil(refreshToken)) {
                                         setRefreshToken(refreshToken)
                                         setAccessToken(accessToken)
                                         health.healthyEvent()
@@ -389,7 +351,7 @@ function runLoop() {
                                         health.unhealthyEvent()
                                         publishAuthorizationState(0)
                                     }
-                                } else if (err !== null && err !== undefined) {
+                                } else if (!_.isNil(err)) {
                                     health.unhealthyEvent()
                                     setRefreshToken(null)
                                     setAccessToken(null)
@@ -411,7 +373,7 @@ function renewTokens(callback) {
     logging.info('Renewing tokens')
 
     queryAccessToken(function(err, body) {
-        if (body !== null && body !== undefined) {
+        if (!_.isNil(body)) {
             const refreshToken = body.refresh_token
             const accessToken = body.access_token
 
@@ -419,11 +381,11 @@ function renewTokens(callback) {
 
             handleResponseBody(body)
 
-            if (refreshToken !== null && refreshToken !== undefined) {
+            if (!_.isNil(refreshToken)) {
                 setRefreshToken(refreshToken)
                 setAccessToken(accessToken)
 
-                if (callback !== null && callback !== undefined) {
+                if (!_.isNil(callback)) {
                     callback()
                 }
             }
@@ -431,7 +393,7 @@ function renewTokens(callback) {
             health.healthyEvent()
         }
 
-        if (err !== null && err !== undefined) {
+        if (!_.isNil(err)) {
             health.unhealthyEvent()
         }
     })
@@ -450,7 +412,7 @@ function doPoll() {
 
     getAccessToken(function(err, ecobeeAccessToken) {
         try {
-            var hasAccessToken = ecobeeAccessToken !== null
+            var hasAccessToken = !_.isNil(ecobeeAccessToken)
 
 
             if (!hasAccessToken) return
@@ -459,14 +421,14 @@ function doPoll() {
 
             queryThermostats(function(err, body) {
                 logging.info('Loaded thermostats')
-                if (err !== null) {
+                if (!_.isNil(err)) {
                     logging.info('error:' + err)
                     logging.info('body:' + JSON.stringify(body))
                 }
 
                 handleResponseBody(body)
 
-                if (err !== null) {
+                if (!_.isNil(err)) {
                     if (
                         err.code === 'ETIMEDOUT' ||
                         err.code === 'ENETUNREACH' ||
@@ -488,13 +450,13 @@ function doPoll() {
                         return
                     }
 
-                } else if (err !== null) {
+                } else if (!_.isNil(err)) {
                     logging.error('Thermostat query failed')
-                } else if (body !== null) {
+                } else if (!_.isNil(body)) {
                     logging.debug('Loading done:' + JSON.stringify(body))
                     const thermostatList = body.thermostatList
                     logging.debug('thermostatList:' + thermostatList)
-                    if (thermostatList === null || thermostatList === undefined) {
+                    if (_.isNil(thermostatList)) {
                         return
                     }
 
