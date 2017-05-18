@@ -53,7 +53,7 @@ client.on('message', (topic, message) => {
     logging.debug(' ' + topic + ':' + message, { topic: topic, value: message })
     logging.info(' ' + topic + ':' + message, { topic: topic, value: message })
     var target = '' + message
-    if (topic.indexOf('/set/mode')) {
+    if (topic.indexOf('/mode/set')) {
         logging.info('setMode: ' + target, { action: 'setmode', value: target })
         setMode(target, function(err, body) {
             logging.info('error:' + err, { error: err })
