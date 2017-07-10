@@ -11,17 +11,17 @@
         "start": "node mqtt-ecobee-bridge.js"
     },
     "dependencies": {
-        "lodash": "^4.17.4",
-        "winston": "^2.3.1",
-        "winston-logstash": "^0.3.0",
-        "redis": "^2.7.1",
-        "fahrenheit-to-celsius": "^1.0.0",
-        "syslog": "^0.1.1",
         "express": "^4.15.2",
+        "fahrenheit-to-celsius": "^1.0.0",
+        "lodash": "^4.17.4",
+        "mqtt": "^2.6.2",
+        "redis": "^2.7.1",
         "repeat": "^0.0.6",
         "request": "^2.81.0",
-        "mqtt": "^2.6.2",
-        "url": "^0.11.0"
+        "syslog": "^0.1.1",
+        "url": "^0.11.0",
+        "winston": "^2.3.1",
+        "winston-splunk-httplogger": "^1.2.2"
     },
     "engines": {
         "node": ">=4"
