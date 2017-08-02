@@ -30,9 +30,9 @@ repeat(runLoop).every(30, 's').start.in(5, 'sec')
 var client = mqtt.setupClient(
     function() {
         const topics = [ecobeeTopic + '/mode/set', ecobeeTopic + '/hvac/set']
-        logging.debug('Connected, subscribing ')
+        logging.info('Connected, subscribing ')
         topics.forEach(function(topic) {
-            logging.debug(' => Subscribing to: ' + topic)
+            logging.info(' => Subscribing to: ' + topic)
             client.subscribe(topic)
         }, this)
 
@@ -47,10 +47,10 @@ var client = mqtt.setupClient(
 var waitingForPIN = false
 
 const redis = Redis.setupClient(null)
-logging.debug('redis: ' + redis)
+logging.info('redis: ' + redis)
 
 client.on('message', (topic, message) => {
-    logging.debug(' ' + topic + ':' + message, { topic: topic, value: message })
+    logging.info(' ' + topic + ':' + message, { topic: topic, value: message })
     logging.info(' ' + topic + ':' + message, { topic: topic, value: message })
     var target = '' + message
     if (topic.indexOf('/mode/set') >= 0) {
@@ -82,7 +82,7 @@ client.on('message', (topic, message) => {
 })
 
 function handleResponseBody(body, callback) {
-    logging.debug('handleResponseBody')
+    logging.info('handleResponseBody')
     if (_.isNil(body)) return
 
     const status = body.status
@@ -114,12 +114,12 @@ function handleResponseBody(body, callback) {
 
 
 function publishAuthorizationState(authState) {
-    logging.debug('publishAuthorizationState')
+    logging.info('publishAuthorizationState')
     client.smartPublish(ecobeeTopic + '/authorized', '' + authState)
 }
 
 function setRefreshToken(token) {
-    logging.debug('setRefreshToken')
+    logging.info('setRefreshToken')
     if (_.isNil(token))
         redis.del('refresh-token')
     else
@@ -129,12 +129,12 @@ function setRefreshToken(token) {
 }
 
 function getRefreshToken(callback) {
-    logging.debug('getRefreshToken')
+    logging.info('getRefreshToken')
     redis.get('refresh-token', callback)
 }
 
 function setAccessToken(token) {
-    logging.debug('setAccessToken')
+    logging.info('setAccessToken')
     if (_.isNil(token)) {
         redis.del('access-token')
     } else {
@@ -300,6 +300,10 @@ function periodicRefresh(callback) {
         if (hasRefreshToken) {
             logging.info('Refreshing tokens')
             renewTokens(callback)
+        } else {
+            setAccessToken(null)
+            logging.info('missing refresh token')
+
         }
     })
 }
@@ -314,12 +318,12 @@ function runLoop() {
             var hasRefreshToken = !_.isNil(ecobeeRefreshToken)
 
             if (hasAccessToken) {
-                logging.debug('Has access token')
+                logging.info('Has access token')
                 publishAuthorizationState(1)
             }
 
             if (hasRefreshToken) {
-                logging.debug('Has refresh token')
+                logging.info('Has refresh token')
             }
 
             if (hasAccessToken) {
@@ -333,23 +337,23 @@ function runLoop() {
                         const ecobeePin = body.ecobeePin
                         const accessToken = body.code
                         publishAuthorizationState(0)
-                        logging.debug('')
-                        logging.debug('============================================================')
-                        logging.debug('=     Ecobee PIN Setup                                     =')
-                        logging.debug('=                                                          =')
-                        logging.debug('=        Ecobee Pin: ' + ecobeePin + '                                  =')
-                        logging.debug('=                                                          =')
-                        logging.debug('=        In 60 seconds access token will refresh...        =')
-                        logging.debug('=                                                          =')
-                        logging.debug('============================================================')
-                        logging.debug('')
-                        logging.debug('')
+                        logging.info('')
+                        logging.info('============================================================')
+                        logging.info('=     Ecobee PIN Setup                                     =')
+                        logging.info('=                                                          =')
+                        logging.info('=        Ecobee Pin: ' + ecobeePin + '                                  =')
+                        logging.info('=                                                          =')
+                        logging.info('=        In 60 seconds access token will refresh...        =')
+                        logging.info('=                                                          =')
+                        logging.info('============================================================')
+                        logging.info('')
+                        logging.info('')
                         health.healthyEvent()
 
                         setAccessToken(accessToken)
 
                         setTimeout(function() {
-                            logging.debug('... querying tokens')
+                            logging.info('... querying tokens')
                             queryRefreshToken(function(err, body) {
                                 if (!_.isNil(body)) {
                                     const refreshToken = body.refresh_token
@@ -403,6 +407,9 @@ function renewTokens(callback) {
                 if (!_.isNil(callback)) {
                     callback()
                 }
+            } else {
+                setRefreshToken(null)
+                setAccessToken(null)
             }
             publishAuthorizationState(1)
             health.healthyEvent()
@@ -466,9 +473,9 @@ function doPoll() {
                 } else if (!_.isNil(err)) {
                     logging.error('Thermostat query failed')
                 } else if (!_.isNil(body)) {
-                    logging.debug('Loading done:' + JSON.stringify(body))
+                    logging.info('Loading done:' + JSON.stringify(body))
                     const thermostatList = body.thermostatList
-                    logging.debug('thermostatList:' + thermostatList)
+                    logging.info('thermostatList:' + thermostatList)
                     if (_.isNil(thermostatList)) {
                         return
                     }
