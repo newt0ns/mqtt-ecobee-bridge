@@ -50,6 +50,10 @@ const redis = Redis.setupClient(null)
 logging.info('redis: ' + redis)
 
 client.on('message', (topic, message) => {
+    if (redis.connected === false) {
+        logging.error('redis is not connected')
+        return
+    }
     logging.info(' ' + topic + ':' + message, { topic: topic, value: message })
     logging.info(' ' + topic + ':' + message, { topic: topic, value: message })
     var target = '' + message
@@ -309,6 +313,10 @@ function periodicRefresh(callback) {
 }
 
 function runLoop() {
+    if (redis.connected === false) {
+        logging.error('redis is not connected')
+        return
+    }
     if (waitingForPIN) return
 
     getAccessToken(function(err, ecobeeAccessToken) {
@@ -429,6 +437,11 @@ function convertToCelsius(value) {
 }
 
 function doPoll() {
+    if (redis.connected === false) {
+        logging.info('redis is not connected, not polling')
+        return
+    }
+
     if (waitingForPIN) return
 
     getAccessToken(function(err, ecobeeAccessToken) {
