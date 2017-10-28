@@ -11,6 +11,15 @@ const Redis = require('redis')
 require('./homeautomation-js-lib/mqtt_helpers.js')
 require('./homeautomation-js-lib/redis_helpers.js')
 
+const redisHost = process.env.REDIS_HOST
+const redisPort = process.env.REDIS_PORT
+const redisDB = process.env.REDIS_DATABASE
+
+if (_.isNil(redisHost) || _.isNil(redisPort) || _.isNil(redisDB)) {
+    logging.warn('Environment variable REDIS_HOST, REDIS_PORT, or REDIS_DATABASE missing, aborting')
+    process.abort()
+}
+
 // create a Configstore instance with an unique ID e.g.
 // Package name and optionally some default values
 
