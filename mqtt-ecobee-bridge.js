@@ -1,15 +1,15 @@
 // Requirements
 const mqtt = require('mqtt')
-const logging = require('./homeautomation-js-lib/logging.js')
-const health = require('./homeautomation-js-lib/health.js')
+const logging = require('homeautomation-js-lib/logging.js')
+const health = require('homeautomation-js-lib/health.js')
 const repeat = require('repeat')
 const request = require('request')
 const _ = require('lodash')
 const f2c = require('fahrenheit-to-celsius')
 const Redis = require('redis')
 
-require('./homeautomation-js-lib/mqtt_helpers.js')
-require('./homeautomation-js-lib/redis_helpers.js')
+require('homeautomation-js-lib/mqtt_helpers.js')
+require('homeautomation-js-lib/redis_helpers.js')
 
 const redisHost = process.env.REDIS_HOST
 const redisPort = process.env.REDIS_PORT
